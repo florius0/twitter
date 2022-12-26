@@ -3,10 +3,18 @@ defmodule Twitter.Tweets do
   The Tweets context.
   """
 
-  import Ecto.Query, warn: false
+  import Ecto.Query, except: [preload: 2], warn: false
   alias Twitter.Repo
 
-  alias Twitter.Tweets.Tweet
+  alias Twitter.Tweets.{Tweet, Like}
+  alias Twitter.Users.{User, Subscription}
+
+
+  @doc false
+  def preload(tweet, opts \\ []), do: Repo.preload(tweet, preloads(), opts)
+
+  @doc false
+  def preloads, do: [:author, :likes, :replies]
 
   @doc """
   Returns the list of tweets.
@@ -17,42 +25,80 @@ defmodule Twitter.Tweets do
       [%Tweet{}, ...]
 
   """
+  @spec list_tweets :: [Tweet.t()]
   def list_tweets do
-    Repo.all(Tweet)
+    Tweet
+    |> Repo.all()
+    |> preload()
+  end
+
+  @doc """
+  Returns the list of tweets for the given user.
+  """
+  @spec list_tweets_for_user(User.t()) :: [Tweet.t()]
+  def list_tweets_for_user(user) do
+    Tweet
+    |> where(author_id: ^user.id)
+    |> Repo.all()
   end
 
   @doc """
   Gets a single tweet.
 
-  Raises `Ecto.NoResultsError` if the Tweet does not exist.
+  Loads the tweet's author and replies.
 
   ## Examples
 
-      iex> get_tweet!(123)
-      %Tweet{}
+      iex> get_tweet(uuid)
+      {:ok, %Tweet{}}
 
-      iex> get_tweet!(456)
-      ** (Ecto.NoResultsError)
-
+      iex> get_tweet(uuid)
+      {:error, :not_found}
   """
-  def get_tweet!(id), do: Repo.get!(Tweet, id)
+  @spec get_tweet(Ecto.UUID.t()) :: {:ok, Tweet.t()} | {:error, :not_found}
+  def get_tweet(id, limit \\ 1000) do
+    Tweet
+    |> Repo.get(id)
+    |> case do
+      nil ->
+        {:error, :not_found}
+
+      tweet ->
+        replies =
+          tweet
+          |> descendants()
+          |> Repo.all()
+          |> preload()
+
+        {:ok, tweet |> preload() |> struct(replies: replies)}
+    end
+  end
 
   @doc """
   Creates a tweet.
 
   ## Examples
 
-      iex> create_tweet(%{field: value})
+      iex> create_tweet(%{field: value}, %User{})
       {:ok, %Tweet{}}
 
-      iex> create_tweet(%{field: bad_value})
+      iex> create_tweet(%{field: bad_value}, %User{})
       {:error, %Ecto.Changeset{}}
 
   """
-  def create_tweet(attrs \\ %{}) do
+  @spec create_tweet(map(), User.t(), [{:reply_to, Tweet.t()}]) :: {:ok, Tweet.t()} | {:error, Ecto.Changeset.t()}
+  def create_tweet(attrs \\ %{}, %User{} = author, opts \\ [reply_to: nil]) do
     %Tweet{}
     |> Tweet.changeset(attrs)
+    |> Ecto.Changeset.cast(%{author_id: author.id}, [:author_id])
     |> Repo.insert()
+    |> case do
+      {:ok, tweet} ->
+        {:ok, preload(tweet)}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
   end
 
   @doc """
@@ -67,10 +113,18 @@ defmodule Twitter.Tweets do
       {:error, %Ecto.Changeset{}}
 
   """
+  @spec update_tweet(Tweet.t(), map()) :: {:ok, Tweet.t()} | {:error, Ecto.Changeset.t()}
   def update_tweet(%Tweet{} = tweet, attrs) do
     tweet
     |> Tweet.changeset(attrs)
     |> Repo.update()
+    |> case do
+      {:ok, tweet} ->
+        {:ok, preload(tweet, force: true)}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
   end
 
   @doc """
@@ -85,20 +139,134 @@ defmodule Twitter.Tweets do
       {:error, %Ecto.Changeset{}}
 
   """
+  @spec delete_tweet(Tweet.t()) :: {:ok, Tweet.t()} | {:error, Ecto.Changeset.t()}
   def delete_tweet(%Tweet{} = tweet) do
     Repo.delete(tweet)
   end
 
   @doc """
-  Returns an `%Ecto.Changeset{}` for tracking tweet changes.
+  Like a tweet.
 
   ## Examples
 
-      iex> change_tweet(tweet)
-      %Ecto.Changeset{data: %Tweet{}}
+      iex> like_tweet(tweet, user)
+      {:ok, %Tweet{}}
 
+      iex> like_tweet(tweet, user)
+      {:error, :already_liked}
   """
-  def change_tweet(%Tweet{} = tweet, attrs \\ %{}) do
-    Tweet.changeset(tweet, attrs)
+  @spec like_tweet(Tweet.t(), User.t()) :: {:ok, Tweet.t()} | {:error, :already_liked}
+  def like_tweet(%Tweet{} = tweet, %User{} = user) do
+    %{tweet_id: tweet.id, user_id: user.id}
+    |> Like.changeset()
+    |> Repo.insert()
+    |> case do
+      {:ok, _like} ->
+        {:ok, preload(tweet, force: true)}
+
+      {:error, %Ecto.Changeset{errors: [tweet_id: {"has already been taken", _}]}} ->
+        {:error, :already_liked}
+
+      {:error, %Ecto.Changeset{errors: [user_id: {"has already been taken", _}]}} ->
+        {:error, :already_liked}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  @doc """
+  Unlike a tweet.
+
+  ## Examples
+
+      iex> unlike_tweet(tweet, user)
+      {:ok, %Tweet{}}
+
+      iex> unlike_tweet(tweet, user)
+      {:error, %Ecto.Changeset{}}
+  """
+  @spec unlike_tweet(Tweet.t(), User.t()) :: {:ok, Tweet.t()} | {:error, Ecto.Changeset.t()}
+  def unlike_tweet(%Tweet{} = tweet, %User{} = user) do
+    with l when not is_nil(l) <- Repo.get_by(Like, tweet_id: tweet.id, user_id: user.id),
+         {:ok, _} <- Repo.delete(l) do
+      {:ok, preload(tweet, force: true)}
+    else
+      nil ->
+        {:error, :not_found}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  @doc """
+  Lists all tweets liked by user
+
+  ## Examples
+
+      iex> get_likes(user)
+      [%Tweet{}, ...]
+  """
+  @spec list_liked_tweets(User.t()) :: [Tweet.t()]
+  def list_liked_tweets(%User{} = user) do
+    from(t in Tweet,
+      join: l in Like,
+      on: l.tweet_id == t.id,
+      where: l.user_id == ^user.id,
+      order_by: [desc: l.inserted_at]
+    )
+    |> Repo.all()
+    |> preload()
+  end
+
+  @doc """
+  Gets user's feed.
+
+  ## Examples
+
+      iex> get_feed(user)
+      [%Tweet{}, ...]
+  """
+  @spec get_feed(User.t()) :: [Tweet.t()]
+  def get_feed(%User{} = user) do
+    followees =
+      user
+      |> Repo.preload([:followees], force: true)
+      |> Map.get(:followees)
+      |> Enum.map(& &1.id)
+
+    from(t in Tweet,
+      where: t.author_id in ^followees,
+      order_by: [desc: t.inserted_at]
+    )
+    |> Repo.all()
+    |> preload()
+  end
+
+  defp descendants(tweet) do
+    from(t in Tweet,
+      join:
+        d in fragment(
+          """
+          WITH RECURSIVE descendants AS (
+            SELECT *
+            FROM tweets
+            WHERE id = ?
+            UNION
+            SELECT tweets.*
+            FROM tweets
+            INNER JOIN descendants
+            ON tweets.reply_to_id = descendants.id
+          )
+          SELECT *
+          FROM descendants
+          """,
+          ^tweet.id
+        ),
+      on: t.id == d.id,
+      where: t.id != ^tweet.id,
+      order_by: [asc: t.inserted_at]
+    )
   end
 end

@@ -8,12 +8,12 @@ defmodule Twitter.TweetsFixtures do
   Generate a tweet.
   """
   def tweet_fixture(attrs \\ %{}) do
+    user = Twitter.UsersFixtures.user_fixture()
+
     {:ok, tweet} =
       attrs
-      |> Enum.into(%{
-        text: "some text"
-      })
-      |> Twitter.Tweets.create_tweet()
+      |> Enum.into(%{text: "some text"})
+      |> Twitter.Tweets.create_tweet(user)
 
     tweet
   end

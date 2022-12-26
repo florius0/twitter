@@ -3,10 +3,16 @@ defmodule Twitter.Users do
   The Users context.
   """
 
-  import Ecto.Query, warn: false
+  import Ecto.Query, except: [preload: 2], warn: false
   alias Twitter.Repo
 
-  alias Twitter.Users.User
+  alias Twitter.Users.{User, Subscription}
+
+  @doc false
+  def preload(user, opts \\ []), do: Repo.preload(user, preloads(), opts)
+
+  @doc false
+  def preloads, do: [:tweets, :likes, :followees, :followers]
 
   @doc """
   Returns the list of users.
@@ -17,25 +23,37 @@ defmodule Twitter.Users do
       [%User{}, ...]
 
   """
+  @spec list_users :: [User.t()]
   def list_users do
-    Repo.all(User)
+    User
+    |> Repo.all()
+    |> preload()
   end
 
   @doc """
   Gets a single user.
 
-  Raises `Ecto.NoResultsError` if the User does not exist.
-
   ## Examples
 
-      iex> get_user!(123)
-      %User{}
+      iex> get_user(uuid)
+      {:ok, %User{}}
 
-      iex> get_user!(456)
-      ** (Ecto.NoResultsError)
+      iex> get_user(uuid)
+      {:error, :not_found}
 
   """
-  def get_user!(id), do: Repo.get!(User, id)
+  @spec(get_user(Ecto.UUID.t()) :: {:ok, User.t()}, {:error, :not_found})
+  def get_user(id) do
+    User
+    |> Repo.get(id)
+    |> case do
+      nil ->
+        {:error, :not_found}
+
+      user ->
+        {:ok, preload(user)}
+    end
+  end
 
   @doc """
   Creates a user.
@@ -49,10 +67,18 @@ defmodule Twitter.Users do
       {:error, %Ecto.Changeset{}}
 
   """
+  @spec create_user(map()) :: {:ok, User.t()} | {:error, Ecto.Changeset.t()}
   def create_user(attrs \\ %{}) do
     %User{}
     |> User.changeset(attrs)
     |> Repo.insert()
+    |> case do
+      {:ok, user} ->
+        {:ok, preload(user)}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
   end
 
   @doc """
@@ -67,10 +93,18 @@ defmodule Twitter.Users do
       {:error, %Ecto.Changeset{}}
 
   """
+  @spec update_user(User.t(), map()) :: {:ok, User.t()} | {:error, Ecto.Changeset.t()}
   def update_user(%User{} = user, attrs) do
     user
     |> User.changeset(attrs)
     |> Repo.update()
+    |> case do
+      {:ok, user} ->
+        {:ok, preload(user, force: true)}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
   end
 
   @doc """
@@ -90,15 +124,66 @@ defmodule Twitter.Users do
   end
 
   @doc """
-  Returns an `%Ecto.Changeset{}` for tracking user changes.
+  Subscribe to a user.
+
+  Returns subscribed user or `:already_subscribed` error.
 
   ## Examples
 
-      iex> change_user(user)
-      %Ecto.Changeset{data: %User{}}
+      iex> subscribe(follower, followee)
+      {:ok, %User{}}
+
+      iex> subscribe(follower, followee)
+      {:error, :already_subscribed}
+
+      iex> subscribe(follower, follower)
+      {:error, :cannot_subscribe_to_self}
+  """
+  @spec subscribe(User.t(), User.t()) :: {:ok, User.t()} | {:error, :already_subscribed} | {:error, :cannot_subscribe_to_self}
+  def subscribe(%User{id: id}, %User{id: id}), do: {:error, :cannot_subscribe_to_self}
+
+  def subscribe(%User{} = follower, %User{} = followee) do
+    %{follower_id: follower.id, followee_id: followee.id}
+    |> Subscription.changeset()
+    |> Repo.insert()
+    |> case do
+      {:ok, _subscription} ->
+        {:ok, preload(follower, force: true)}
+
+      {:error, %Ecto.Changeset{errors: [follower_id: {"has already been taken", _}]}} ->
+        {:error, :already_subscribed}
+
+      {:error, %Ecto.Changeset{errors: [followee_id: {"has already been taken", _}]}} ->
+        {:error, :already_subscribed}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  @doc """
+  Unsubscribe from a user.
+
+  ## Examples
+
+      iex> unsubscribe(follower, followee)
+      {:ok, %User{}}
+
+      iex> unsubscribe(follower, followee)
+      {:error, :not_found}
 
   """
-  def change_user(%User{} = user, attrs \\ %{}) do
-    User.changeset(user, attrs)
+  @spec unsubscribe(User.t(), User.t()) :: {:ok, User.t()} | {:error, :not_found}
+  def unsubscribe(%User{} = follower, %User{} = followee) do
+    with s when not is_nil(s) <- Repo.get_by(Subscription, follower_id: follower.id, followee_id: followee.id),
+         {:ok, _} <- Repo.delete(s) do
+      {:ok, preload(follower, force: true)}
+    else
+      nil ->
+        {:error, :not_found}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
   end
 end

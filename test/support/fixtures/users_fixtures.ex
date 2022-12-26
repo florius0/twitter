@@ -12,7 +12,7 @@ defmodule Twitter.UsersFixtures do
       attrs
       |> Enum.into(%{
         name: "some name",
-        password: "some password"
+        password_hash: "some password"
       })
       |> Twitter.Users.create_user()
 

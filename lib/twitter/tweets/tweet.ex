@@ -20,7 +20,7 @@ defmodule Twitter.Tweets.Tweet do
   end
 
   @doc false
-  def changeset(tweet, attrs) do
+  def changeset(tweet \\ %__MODULE__{}, attrs) do
     tweet
     |> cast(attrs, [:text])
     |> validate_required([:text])
