@@ -60,6 +60,7 @@ defmodule Twitter.TweetsTest do
 
     test "list_liked_tweets/1 returns the list of liked tweets for the given user" do
       user = user_fixture()
+
       tweet1 = tweet_fixture()
       tweet2 = tweet_fixture()
 
@@ -67,14 +68,17 @@ defmodule Twitter.TweetsTest do
       tweet2_id = tweet2.id
 
       assert {:ok, _} = Tweets.like_tweet(tweet1, user)
+      :timer.sleep(1000)
       assert {:ok, _} = Tweets.like_tweet(tweet2, user)
 
-      assert [%Tweet{id: ^tweet1_id}, %Tweet{id: ^tweet2_id}] = Tweets.list_liked_tweets(user)
+      assert [%Tweet{id: ^tweet2_id}, %Tweet{id: ^tweet1_id}] = Tweets.list_liked_tweets(user)
     end
 
     test "get_feed/1 returns the feed for the given user" do
       user = user_fixture()
+
       tweet1 = tweet_fixture()
+      :timer.sleep(1000)
       tweet2 = tweet_fixture()
 
       tweet1_id = tweet1.id
@@ -83,7 +87,7 @@ defmodule Twitter.TweetsTest do
       assert {:ok, _} = Users.subscribe(user, tweet1.author)
       assert {:ok, _} = Users.subscribe(user, tweet2.author)
 
-      assert [%Tweet{id: tweet2_id}, %Tweet{id: tweet1_id}] = Tweets.get_feed(user)
+      assert [%Tweet{id: ^tweet2_id}, %Tweet{id: ^tweet1_id}] = Tweets.get_feed(user)
     end
   end
 end
