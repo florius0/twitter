@@ -9,7 +9,6 @@ defmodule Twitter.Tweets do
   alias Twitter.Tweets.{Tweet, Like}
   alias Twitter.Users.{User, Subscription}
 
-
   @doc false
   def preload(tweet, opts \\ []), do: Repo.preload(tweet, preloads(), opts)
 
@@ -86,7 +85,8 @@ defmodule Twitter.Tweets do
       {:error, %Ecto.Changeset{}}
 
   """
-  @spec create_tweet(map(), User.t(), [{:reply_to, Tweet.t()}]) :: {:ok, Tweet.t()} | {:error, Ecto.Changeset.t()}
+  @spec create_tweet(map(), User.t(), [{:reply_to, Tweet.t()}]) ::
+          {:ok, Tweet.t()} | {:error, Ecto.Changeset.t()}
   def create_tweet(attrs \\ %{}, %User{} = author, opts \\ [reply_to: nil]) do
     %Tweet{}
     |> Tweet.changeset(attrs)
@@ -244,29 +244,23 @@ defmodule Twitter.Tweets do
     |> preload()
   end
 
-  defp descendants(tweet) do
+  def descendants(tweet, depth \\ 1000) do
     from(t in Tweet,
-      join:
-        d in fragment(
+      where:
+        t.id in fragment(
           """
-          WITH RECURSIVE descendants AS (
-            SELECT *
-            FROM tweets
-            WHERE id = ?
-            UNION
-            SELECT tweets.*
-            FROM tweets
-            INNER JOIN descendants
-            ON tweets.reply_to_id = descendants.id
+          WITH RECURSIVE replies_tree AS (
+            SELECT id, 0 AS depth FROM tweets WHERE id = ?
+          UNION ALL
+            SELECT tweets.id, replies_tree.depth + 1 FROM tweets
+              JOIN replies_tree ON tweets.reply_to_id = replies_tree.id
+              WHERE depth + 1 < ?
           )
-          SELECT *
-          FROM descendants
+          SELECT id FROM replies_tree
           """,
-          ^tweet.id
-        ),
-      on: t.id == d.id,
-      where: t.id != ^tweet.id,
-      order_by: [asc: t.inserted_at]
+          type(^tweet.id, :binary_id),
+          type(^depth, :integer)
+        )
     )
   end
 end
