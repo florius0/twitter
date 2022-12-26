@@ -8,5 +8,10 @@ defmodule Twitter.Repo.Migrations.CreateLikes do
 
       timestamps()
     end
+
+    create index(:likes, [:user_id])
+    create index(:likes, [:tweet_id])
+
+    create unique_index(:likes, [:user_id, :tweet_id])
   end
 end

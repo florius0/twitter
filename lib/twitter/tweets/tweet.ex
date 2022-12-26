@@ -6,8 +6,15 @@ defmodule Twitter.Tweets.Tweet do
   @foreign_key_type :binary_id
   schema "tweets" do
     field :text, :string
-    field :author, :binary_id
-    field :reply_to, :binary_id
+
+    belongs_to :author, Twitter.Users.User, foreign_key: :author_id
+    belongs_to :reply_to, Twitter.Tweets.Tweet, foreign_key: :reply_to_id
+
+    many_to_many :likes, Twitter.Users.User,
+      join_through: "likes",
+      join_keys: [tweet_id: :id, user_id: :id]
+
+    has_many :replies, Twitter.Tweets.Tweet, foreign_key: :reply_to_id
 
     timestamps()
   end

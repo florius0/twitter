@@ -5,7 +5,7 @@ defmodule Twitter.Repo.Migrations.CreateUsers do
     create table(:users, primary_key: false) do
       add :id, :binary_id, primary_key: true
       add :name, :string
-      add :password, :string
+      add :password_hash, :string
 
       timestamps()
     end
