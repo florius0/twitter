@@ -14,10 +14,18 @@ defmodule TwitterWeb.UserView do
     %{
       id: user.id,
       name: user.name,
-      tweets: user.tweets && render_many(user.tweets, TwitterWeb.TweetView, "tweet.json"),
-      followers: user.followers && render_many(user.followers, UserView, "user.json"),
-      followees: user.followees && render_many(user.followees, UserView, "user.json"),
-      likes: user.likes && render_many(user.likes, TwitterWeb.TweetView, "tweet.json")
+      tweets: render_tweets(user.tweets),
+      followers: render_users(user.followers),
+      followees: render_users(user.followees),
+      likes: render_tweets(user.likes),
+      inserted_at: user.inserted_at,
+      updated_at: user.updated_at
     }
   end
+
+  defp render_tweets(tweets) when is_list(tweets), do: render_many(tweets, TwitterWeb.TweetView, "tweet.json")
+  defp render_tweets(_), do: nil
+
+  defp render_users(users) when is_list(users), do: render_many(users, UserView, "user.json")
+  defp render_users(_), do: nil
 end

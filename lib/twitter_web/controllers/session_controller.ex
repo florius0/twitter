@@ -18,7 +18,6 @@ defmodule TwitterWeb.SessionController do
   def delete(conn, _params) do
     conn
     |> Guardian.Plug.sign_out()
-    |> put_status(:no_content)
-    |> json(%{})
+    |> send_resp(204, "")
   end
 end

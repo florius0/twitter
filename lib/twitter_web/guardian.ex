@@ -9,10 +9,4 @@ defmodule TwitterWeb.Guardian do
 
   def resource_from_claims(%{"sub" => id}), do: Users.get_user(id)
   def resource_from_claims(_), do: {:error, :invalid_token}
-
-  def after_sign_in(conn, resource, token, _, _) do
-    IO.inspect(token)
-
-    {:ok, conn}
-  end
 end

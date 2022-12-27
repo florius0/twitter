@@ -28,6 +28,7 @@ defmodule TwitterWeb.Router do
 
     get "/users/:id/tweets", UserController, :tweets
     get "/users/:id/feed", UserController, :feed
+    get "/users/:id/likes", UserController, :likes
     post "/users/:id/subscription", UserController, :subscribe
     delete "/users/:id/subscription", UserController, :unsubscribe
 
