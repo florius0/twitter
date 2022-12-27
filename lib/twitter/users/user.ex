@@ -6,7 +6,9 @@ defmodule Twitter.Users.User do
   @foreign_key_type :binary_id
   schema "users" do
     field :name, :string
-    field :password_hash, :string
+    field :password, :string, virtual: true
+    field :password_confirmation, :string, virtual: true
+    field :password_hash, :string, redact: true
 
     has_many :tweets, Twitter.Tweets.Tweet, foreign_key: :author_id
 
@@ -28,7 +30,25 @@ defmodule Twitter.Users.User do
   @doc false
   def changeset(user \\ %__MODULE__{}, attrs) do
     user
-    |> cast(attrs, [:name, :password_hash])
+    |> cast(attrs, [:name, :password_hash, :password, :password_confirmation])
+    |> validate_length(:name, min: 3, max: 20)
+    |> validate_length(:password, min: 8, max: 20)
+    |> validate_confirmation(:password)
+    |> hash_password()
+    |> unique_constraint(:name)
     |> validate_required([:name, :password_hash])
+  end
+
+  defp hash_password(changeset) do
+    case changeset do
+      %Ecto.Changeset{valid?: true, changes: %{password: password}} ->
+        changeset
+        |> put_change(:password_hash, Bcrypt.hash_pwd_salt(password))
+        |> put_change(:password, nil)
+        |> put_change(:password_confirmation, nil)
+
+      _ ->
+        changeset
+    end
   end
 end

@@ -23,11 +23,7 @@ config :twitter, TwitterWeb.Endpoint,
   check_origin: false,
   code_reloader: true,
   debug_errors: true,
-  secret_key_base: "nXZLiFd0WVn/IkEDEfLUTLVXpnJ0vEePd7ehKiGwaL6xRSZI7FvdJQJBIdESrNPK",
-  watchers: [
-    # Start the esbuild watcher by calling Esbuild.install_and_run(:default, args)
-    esbuild: {Esbuild, :install_and_run, [:default, ~w(--sourcemap=inline --watch)]}
-  ]
+  secret_key_base: "nXZLiFd0WVn/IkEDEfLUTLVXpnJ0vEePd7ehKiGwaL6xRSZI7FvdJQJBIdESrNPK"
 
 # ## SSL Support
 #

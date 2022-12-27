@@ -18,6 +18,12 @@ config :twitter, TwitterWeb.Endpoint,
   pubsub_server: Twitter.PubSub,
   live_view: [signing_salt: "sJT0IQHm"]
 
+config :twitter, TwitterWeb.Guardian,
+  issuer: "twitter",
+  ttl: {1, :day},
+  verify_issuer: true,
+  secret_key: "super secret key"
+
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.14.29",

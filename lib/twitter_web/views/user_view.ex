@@ -14,7 +14,10 @@ defmodule TwitterWeb.UserView do
     %{
       id: user.id,
       name: user.name,
-      password: user.password
+      tweets: user.tweets && render_many(user.tweets, TwitterWeb.TweetView, "tweet.json"),
+      followers: user.followers && render_many(user.followers, UserView, "user.json"),
+      followees: user.followees && render_many(user.followees, UserView, "user.json"),
+      likes: user.likes && render_many(user.likes, TwitterWeb.TweetView, "tweet.json")
     }
   end
 end

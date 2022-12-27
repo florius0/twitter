@@ -6,7 +6,6 @@ defmodule TwitterWeb.FallbackController do
   """
   use TwitterWeb, :controller
 
-  # This clause handles errors returned by Ecto's insert/update/delete.
   def call(conn, {:error, %Ecto.Changeset{} = changeset}) do
     conn
     |> put_status(:unprocessable_entity)
@@ -14,11 +13,25 @@ defmodule TwitterWeb.FallbackController do
     |> render("error.json", changeset: changeset)
   end
 
-  # This clause is an example of how to handle resources that cannot be found.
   def call(conn, {:error, :not_found}) do
     conn
     |> put_status(:not_found)
     |> put_view(TwitterWeb.ErrorView)
     |> render(:"404")
+  end
+
+
+  def call(conn, {:error, :unauthorized}) do
+    conn
+    |> put_status(:unauthorized)
+    |> put_view(TwitterWeb.ErrorView)
+    |> render(:"401")
+  end
+
+  def call(conn, {:error, :forbidden}) do
+    conn
+    |> put_status(:forbidden)
+    |> put_view(TwitterWeb.ErrorView)
+    |> render(:"403")
   end
 end

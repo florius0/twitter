@@ -2,17 +2,28 @@ defmodule TwitterWeb.UserController do
   use TwitterWeb, :controller
 
   alias Twitter.Users
-  alias Twitter.Users.User
+  alias Twitter.Tweets
+  alias Twitter.Users.Policies
 
   action_fallback TwitterWeb.FallbackController
 
   def index(conn, _params) do
-    users = Users.list_users()
-    render(conn, "index.json", users: users)
+    with users <- Users.list_users(),
+         {:ok, _user} <- Policies.list(Guardian.Plug.current_resource(conn), users) do
+      render(conn, "index.json", users: users)
+    end
+  end
+
+  def show(conn, %{"id" => id}) do
+    with {:ok, user} <- Users.get_user(id),
+         {:ok, _user} <- Policies.show(Guardian.Plug.current_resource(conn), user) do
+      render(conn, "show.json", user: user)
+    end
   end
 
   def create(conn, %{"user" => user_params}) do
-    with {:ok, %User{} = user} <- Users.create_user(user_params) do
+    with {:ok, _} <- Policies.create(Guardian.Plug.current_resource(conn), user_params),
+         {:ok, user} <- Users.create_user(user_params) do
       conn
       |> put_status(:created)
       |> put_resp_header("location", Routes.user_path(conn, :show, user))
@@ -20,24 +31,55 @@ defmodule TwitterWeb.UserController do
     end
   end
 
-  def show(conn, %{"id" => id}) do
-    user = Users.get_user!(id)
-    render(conn, "show.json", user: user)
-  end
-
   def update(conn, %{"id" => id, "user" => user_params}) do
-    user = Users.get_user!(id)
-
-    with {:ok, %User{} = user} <- Users.update_user(user, user_params) do
+    with {:ok, user} <- Users.get_user(id),
+         {:ok, _user} <- Policies.update(Guardian.Plug.current_resource(conn), user),
+         {:ok, user} <- Users.update_user(user, user_params) do
       render(conn, "show.json", user: user)
     end
   end
 
   def delete(conn, %{"id" => id}) do
-    user = Users.get_user!(id)
+    with {:ok, user} <- Users.get_user(id),
+         {:ok, _user} <- Policies.delete(Guardian.Plug.current_resource(conn), user),
+         {:ok, user} <- Users.delete_user(user) do
+      render(conn, "show.json", user: user)
+    end
+  end
 
-    with {:ok, %User{}} <- Users.delete_user(user) do
-      send_resp(conn, :no_content, "")
+  def subscribe(conn, %{"id" => id}) do
+    current_user = Guardian.Plug.current_resource(conn)
+
+    with {:ok, user} <- Users.get_user(id),
+         {:ok, _user} <- Policies.subscribe(current_user, user),
+         {:ok, user} <- Users.subscribe(current_user, user) do
+      render(conn, "show.json", user: user)
+    end
+  end
+
+  def unsubscribe(conn, %{"id" => id}) do
+    current_user = Guardian.Plug.current_resource(conn)
+
+    with {:ok, user} <- Users.get_user(id),
+         {:ok, _user} <- Policies.unsubscribe(current_user, user),
+         {:ok, user} <- Users.unsubscribe(current_user, user) do
+      render(conn, "show.json", user: user)
+    end
+  end
+
+  def feed(conn, %{"id" => id}) do
+    with {:ok, user} <- Users.get_user(id),
+         {:ok, _user} <- Policies.feed(Guardian.Plug.current_resource(conn), user),
+         tweets <- Tweets.get_feed(user) do
+      render(conn, "feed.json", tweets: tweets)
+    end
+  end
+
+  def likes(conn, %{"id" => id}) do
+    with {:ok, user} <- Users.get_user(id),
+         {:ok, _user} <- Policies.likes(Guardian.Plug.current_resource(conn), user),
+         tweets <- Tweets.list_liked_tweets(user) do
+      render(conn, "likes.json", tweets: tweets)
     end
   end
 end

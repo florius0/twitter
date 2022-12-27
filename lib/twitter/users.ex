@@ -56,6 +56,36 @@ defmodule Twitter.Users do
   end
 
   @doc """
+  Gets a single user by name and password.
+
+  ## Examples
+
+      iex> get_user_by_name_and_password("foo", "bar")
+      {:ok, %User{}}
+
+      iex> get_user_by_name_and_password("foo", "bar")
+      {:error, :not_found}
+
+  """
+  @spec login_user(String.t(), String.t()) :: {:ok, User.t()}, {:error, :not_found}
+  def login_user(name, password) do
+    User
+    |> Repo.get_by(name: name)
+    |> case do
+      nil ->
+        Bcrypt.no_user_verify()
+        {:error, :not_found}
+
+      user ->
+        if Bcrypt.verify_pass(password, user.password_hash) do
+          {:ok, preload(user)}
+        else
+          {:error, :not_found}
+        end
+    end
+  end
+
+  @doc """
   Creates a user.
 
   ## Examples

@@ -13,7 +13,11 @@ defmodule TwitterWeb.TweetView do
   def render("tweet.json", %{tweet: tweet}) do
     %{
       id: tweet.id,
-      text: tweet.text
+      text: tweet.text,
+      author: render_one(tweet.author, TwitterWeb.UserView, "user.json"),
+      reply_to: tweet.reply_to && render_one(tweet.reply_to, TweetView, "tweet.json"),
+      likes: tweet.likes && render_many(tweet.likes, TwitterWeb.UserView, "user.json"),
+      replies: tweet.replies && render_many(tweet.replies, TweetView, "tweet.json")
     }
   end
 end
