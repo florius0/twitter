@@ -120,7 +120,7 @@ defmodule Twitter.Users do
 
   """
   def delete_user(%User{} = user) do
-    Repo.delete(user)
+    Repo.delete(user, stale_error_field: :id)
   end
 
   @doc """

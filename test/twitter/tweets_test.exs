@@ -10,16 +10,74 @@ defmodule Twitter.TweetsTest do
 
     import Twitter.{TweetsFixtures, UsersFixtures}
 
-    @invalid_attrs %{text: nil}
-
     test "list_tweets/0 returns all tweets" do
       tweet = tweet_fixture()
       assert Tweets.list_tweets() == [tweet]
     end
 
     test "get_tweet/1 returns the tweet with given id" do
+      tweet_id = tweet_fixture().id
+
+      assert {:ok, %Tweet{id: ^tweet_id}} = Tweets.get_tweet(tweet_id)
+    end
+
+    test "get_tweet/1 traverses reply tree" do
+      user = user_fixture()
+      {:ok, tweet1} = Tweets.create_tweet(%{text: "1"}, user)
+      {:ok, tweet2} = Tweets.create_tweet(%{text: "2"}, user, tweet1)
+      {:ok, tweet3} = Tweets.create_tweet(%{text: "3"}, user, tweet2)
+
+      tweet1_id = tweet1.id
+      tweet2_id = tweet2.id
+      tweet3_id = tweet3.id
+
+      assert {:ok, %Tweet{replies: [%Tweet{id: ^tweet1_id}, %Tweet{id: ^tweet2_id}, %Tweet{id: ^tweet3_id}]}} = Tweets.get_tweet(tweet1.id)
+    end
+
+    test "create_tweet/1 with valid data creates a tweet" do
+      user = user_fixture()
+      assert {:ok, %Tweet{} = tweet} = Tweets.create_tweet(%{text: "Hello world!"}, user)
+      assert tweet.author_id == user.id
+      assert tweet.text == "Hello world!"
+    end
+
+    test "create_tweet/1 with invalid data returns error changeset" do
+      user = user_fixture()
+      assert {:error, %Ecto.Changeset{}} = Tweets.create_tweet(%{}, user)
+    end
+
+    test "update_tweet/2 with valid data updates the tweet" do
       tweet = tweet_fixture()
-      assert {:ok, tweet} = Tweets.get_tweet(tweet.id)
+      assert {:ok, %Tweet{} = tweet} = Tweets.update_tweet(tweet, %{text: "Hello world!"})
+      assert tweet.text == "Hello world!"
+    end
+
+    test "update_tweet/2 with invalid data returns error changeset" do
+      tweet = tweet_fixture()
+      assert {:error, %Ecto.Changeset{}} = Tweets.update_tweet(tweet, %{text: nil})
+    end
+
+    test "delete_tweet/1 deletes the tweet" do
+      tweet = tweet_fixture()
+      assert {:ok, %Tweet{}} = Tweets.delete_tweet(tweet)
+      assert {:error, _} = Tweets.get_tweet(tweet.id)
+    end
+
+    test "delete_tweet/1 returns an error when tweet does not exist" do
+      assert {:error, _} = Tweets.delete_tweet(%Tweet{id: Ecto.UUID.generate()})
+    end
+
+    test "list_tweets_for_user/1 returns the list of tweets for the given user" do
+      user = user_fixture()
+
+      {:ok, tweet1} = Tweets.create_tweet(%{text: "Hello world!"}, user)
+      :timer.sleep(1000)
+      {:ok, tweet2} = Tweets.create_tweet(%{text: "Hello world!"}, user)
+
+      tweet1_id = tweet1.id
+      tweet2_id = tweet2.id
+
+      assert [%Tweet{id: ^tweet2_id}, %Tweet{id: ^tweet1_id}] = Tweets.list_tweets_for_user(user)
     end
 
     test "like_tweet/2 likes the tweet" do

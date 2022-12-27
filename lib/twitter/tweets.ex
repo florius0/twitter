@@ -7,7 +7,7 @@ defmodule Twitter.Tweets do
   alias Twitter.Repo
 
   alias Twitter.Tweets.{Tweet, Like}
-  alias Twitter.Users.{User, Subscription}
+  alias Twitter.Users.User
 
   @doc false
   def preload(tweet, opts \\ []), do: Repo.preload(tweet, preloads(), opts)
@@ -38,6 +38,7 @@ defmodule Twitter.Tweets do
   def list_tweets_for_user(user) do
     Tweet
     |> where(author_id: ^user.id)
+    |> order_by(desc: :inserted_at)
     |> Repo.all()
   end
 
@@ -54,8 +55,8 @@ defmodule Twitter.Tweets do
       iex> get_tweet(uuid)
       {:error, :not_found}
   """
-  @spec get_tweet(Ecto.UUID.t()) :: {:ok, Tweet.t()} | {:error, :not_found}
-  def get_tweet(id, limit \\ 1000) do
+  @spec get_tweet(Ecto.UUID.t(), non_neg_integer()) :: {:ok, Tweet.t()} | {:error, :not_found}
+  def get_tweet(id, depth \\ 1000) do
     Tweet
     |> Repo.get(id)
     |> case do
@@ -65,7 +66,7 @@ defmodule Twitter.Tweets do
       tweet ->
         replies =
           tweet
-          |> descendants()
+          |> descendants(depth)
           |> Repo.all()
           |> preload()
 
@@ -85,12 +86,14 @@ defmodule Twitter.Tweets do
       {:error, %Ecto.Changeset{}}
 
   """
-  @spec create_tweet(map(), User.t(), [{:reply_to, Tweet.t()}]) ::
+  @spec create_tweet(map(), User.t(), Tweet.t() | nil) ::
           {:ok, Tweet.t()} | {:error, Ecto.Changeset.t()}
-  def create_tweet(attrs \\ %{}, %User{} = author, opts \\ [reply_to: nil]) do
+  def create_tweet(attrs, %User{} = author, reply_to \\ nil) do
+    a = %{author_id: author.id, reply_to_id: reply_to && reply_to.id}
+
     %Tweet{}
     |> Tweet.changeset(attrs)
-    |> Ecto.Changeset.cast(%{author_id: author.id}, [:author_id])
+    |> Ecto.Changeset.cast(a, [:author_id, :reply_to_id])
     |> Repo.insert()
     |> case do
       {:ok, tweet} ->
@@ -141,7 +144,7 @@ defmodule Twitter.Tweets do
   """
   @spec delete_tweet(Tweet.t()) :: {:ok, Tweet.t()} | {:error, Ecto.Changeset.t()}
   def delete_tweet(%Tweet{} = tweet) do
-    Repo.delete(tweet)
+    Repo.delete(tweet, stale_error_field: :id)
   end
 
   @doc """
